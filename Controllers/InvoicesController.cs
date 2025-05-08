@@ -1,8 +1,9 @@
+using AutoMapper;
+using FlexiBooks.Data;
+using FlexiBooks.DTOs;
+using FlexiBooks.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using FlexiBooks.Data;
-using FlexiBooks.Models;
-using FlexiBooks.DTOs;
 
 namespace FlexiBooks.Controllers
 {
@@ -11,44 +12,39 @@ namespace FlexiBooks.Controllers
     public class InvoicesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IMapper _mapper;
 
-        public InvoicesController(AppDbContext context)
+        public InvoicesController(AppDbContext context, IMapper mapper)
         {
             _context = context;
+            _mapper = mapper;
         }
 
         // GET: api/invoices
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Invoice>>> GetInvoices()
+        public async Task<ActionResult<IEnumerable<InvoiceDto>>> GetInvoices()
         {
-            return await _context.Invoices
+            var invoices = await _context.Invoices
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     .ThenInclude(ii => ii.Product)
                 .ToListAsync();
+
+            return Ok(_mapper.Map<IEnumerable<InvoiceDto>>(invoices));
         }
 
         // POST: api/invoices
         [HttpPost]
-        public async Task<ActionResult<Invoice>> CreateInvoice(InvoiceCreateDto dto)
+        public async Task<ActionResult<InvoiceDto>> CreateInvoice(InvoiceCreateDto dto)
         {
-            var invoice = new Invoice
-            {
-                ClientId = dto.ClientId,
-                DateIssued = dto.DateIssued,
-                TotalAmount = dto.Items.Sum(i => i.UnitPrice * i.Quantity),
-                Items = dto.Items.Select(i => new InvoiceItem
-                {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice
-                }).ToList()
-            };
+            var invoice = _mapper.Map<Invoice>(dto);
+            invoice.TotalAmount = dto.Items.Sum(i => i.UnitPrice * i.Quantity);
 
             _context.Invoices.Add(invoice);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetInvoices), new { id = invoice.Id }, invoice);
+            var result = _mapper.Map<InvoiceDto>(invoice);
+            return CreatedAtAction(nameof(GetInvoices), new { id = invoice.Id }, result);
         }
     }
 }
